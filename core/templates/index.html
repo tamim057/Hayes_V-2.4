@@ -1,0 +1,499 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🔥 Duty System PRO</title>
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+    font-family:Arial;
+    background:#0b1120;
+    color:white;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    min-height:100vh;
+    overflow:hidden;
+    position:relative;
+}
+
+/* BACKGROUND */
+body::before{
+    content:"";
+    position:fixed;
+    inset:0;
+    background:
+    radial-gradient(circle at top,#1e3a8a22,transparent 70%),
+    linear-gradient(to bottom,#020617,#0f172a,#111827);
+    z-index:-5;
+}
+
+/* RAIN */
+.rain{
+    position:fixed;
+    width:100%;
+    height:100%;
+    top:0;
+    left:0;
+    pointer-events:none;
+    overflow:hidden;
+    z-index:-1;
+}
+
+.drop{
+    position:absolute;
+    bottom:100%;
+    width:2px;
+    height:120px;
+    background:linear-gradient(to bottom,rgba(255,255,255,0),rgba(255,255,255,0.8));
+    opacity:0.5;
+    animation:fall linear infinite;
+}
+
+@keyframes fall{
+    0%{transform:translateY(-120px);}
+    100%{transform:translateY(120vh);}
+}
+
+/* LIGHTNING */
+.flash{
+    position:fixed;
+    inset:0;
+    background:white;
+    opacity:0;
+    pointer-events:none;
+    z-index:-2;
+    animation:lightning 8s infinite;
+}
+
+@keyframes lightning{
+    0%,100%{opacity:0;}
+    10%{opacity:0.7;}
+    10.5%{opacity:0;}
+    50%{opacity:0.8;}
+    50.3%{opacity:0;}
+}
+
+/* UI */
+.container{
+    width:420px;
+    background:rgba(17,24,39,0.75);
+    border:1px solid rgba(255,255,255,0.08);
+    padding:25px;
+    border-radius:18px;
+    backdrop-filter:blur(10px);
+}
+
+h1{
+    text-align:center;
+    color:#60a5fa;
+    margin-bottom:15px;
+}
+
+input{
+    width:100%;
+    padding:12px;
+    margin:10px 0;
+    border:none;
+    border-radius:10px;
+    background:#1f2937;
+    color:white;
+}
+
+button{
+    width:100%;
+    padding:12px;
+    border:none;
+    border-radius:10px;
+    cursor:pointer;
+    font-weight:bold;
+    transition:0.2s;
+}
+
+button:hover{
+    transform:scale(1.03);
+}
+
+.login{
+    background:#2563eb;
+    color:white;
+}
+
+.panel{
+    display:none;
+    margin-top:20px;
+}
+
+.actions{
+    display:flex;
+    gap:10px;
+}
+
+.actions button{
+    flex:1;
+}
+
+.on{
+    background:#22c55e;
+}
+
+.off{
+    background:#ef4444;
+}
+
+.status{
+    margin-top:15px;
+    background:#0f172a;
+    padding:15px;
+    border-radius:12px;
+    text-align:center;
+}
+
+#state{
+    font-size:18px;
+    font-weight:bold;
+}
+
+#timer{
+    font-size:32px;
+    margin-top:10px;
+}
+
+/* BELL */
+.bellBtn{
+    margin-top:12px;
+    background:orange;
+    color:black;
+}
+
+.pulse{
+    animation:pulse 1s infinite;
+}
+
+@keyframes pulse{
+    0%{transform:scale(1);}
+    50%{transform:scale(1.06);}
+    100%{transform:scale(1);}
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="rain" id="rain"></div>
+<div class="flash"></div>
+
+<div class="container">
+
+<h1>🔥 Duty System PRO</h1>
+
+<input id="user" placeholder="Discord User ID">
+
+<button class="login" onclick="login()">LOGIN</button>
+
+<div class="panel" id="panel">
+
+<div class="actions">
+<button class="on" onclick="onDuty()">ON DUTY</button>
+<button class="off" onclick="offDuty()">OFF DUTY</button>
+</div>
+
+<button id="bell" class="bellBtn" onclick="bellClick()">🔔 BELL</button>
+
+<div class="status">
+<div id="state">OFF DUTY 🔴</div>
+<div id="timer">00:00:00</div>
+</div>
+
+</div>
+
+</div>
+
+<script>
+let actionLock = false;
+let currentUser = null;
+let timer = null;
+
+/* LOGIN */
+function login(){
+
+    currentUser = document.getElementById("user").value.trim();
+
+    if(!currentUser){
+        alert("Enter User ID");
+        return;
+    }
+
+    document.getElementById("panel").style.display = "block";
+
+    fetch("/api/login/", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({user_id:currentUser})
+    });
+}
+
+/* ON DUTY */
+async function onDuty(){
+
+    if(actionLock) return;
+
+    actionLock = true;
+
+    const btn =
+    document.querySelector(".on");
+
+    btn.disabled = true;
+
+    try{
+
+        let res = await fetch("/api/on/", {
+
+            method:"POST",
+
+            headers:{
+                "Content-Type":"application/json"
+            },
+
+            body:JSON.stringify({
+                user_id:currentUser
+            })
+        });
+
+        let data = await res.json();
+
+        console.log(data);
+
+    }catch(err){
+
+        console.log(err);
+
+    }finally{
+
+        setTimeout(()=>{
+
+            actionLock = false;
+
+            btn.disabled = false;
+
+        },1000);
+    }
+}
+
+/* OFF DUTY */
+async function offDuty(){
+
+    if(actionLock) return;
+
+    actionLock = true;
+
+    const btn =
+    document.querySelector(".off");
+
+    btn.disabled = true;
+
+    try{
+
+        let res = await fetch("/api/off/", {
+
+            method:"POST",
+
+            headers:{
+                "Content-Type":"application/json"
+            },
+
+            body:JSON.stringify({
+                user_id:currentUser
+            })
+        });
+
+        let data = await res.json();
+
+        console.log(data);
+
+    }catch(err){
+
+        console.log(err);
+
+    }finally{
+
+        setTimeout(()=>{
+
+            actionLock = false;
+
+            btn.disabled = false;
+
+        },1000);
+    }
+}
+
+/* BELL */
+async function bellClick(){
+
+    if(actionLock) return;
+
+    actionLock = true;
+
+    const btn =
+    document.getElementById("bell");
+
+    btn.disabled = true;
+
+    try{
+
+        await fetch("/api/bell/", {
+
+            method:"POST",
+
+            headers:{
+                "Content-Type":"application/json"
+            },
+
+            body:JSON.stringify({
+                user_id:currentUser
+            })
+        });
+
+    }catch(err){
+
+        console.log(err);
+
+    }finally{
+
+        setTimeout(()=>{
+
+            actionLock = false;
+
+            btn.disabled = false;
+
+        },1000);
+    }
+}
+/* ONLY UI TIMER (NOT REAL LOGIC) */
+let sec = 0;
+
+function startFakeTimer(){
+
+    clearInterval(timer);
+    sec = 0;
+
+    timer = setInterval(()=>{
+
+        sec++;
+
+        let h = String(Math.floor(sec/3600)).padStart(2,'0');
+        let m = String(Math.floor((sec%3600)/60)).padStart(2,'0');
+        let s = String(sec%60).padStart(2,'0');
+
+        document.getElementById("timer").innerText = `${h}:${m}:${s}`;
+
+    },1000);
+}
+
+/* RAIN EFFECT */
+const rain = document.getElementById("rain");
+
+for(let i=0;i<200;i++){
+
+    let drop = document.createElement("div");
+
+    drop.classList.add("drop");
+
+    drop.style.left = Math.random()*100 + "vw";
+    drop.style.animationDuration = (0.4 + Math.random()*0.5) + "s";
+    drop.style.opacity = Math.random();
+
+    rain.appendChild(drop);
+}
+async function syncStatus(){
+
+    if(!currentUser) return;
+
+    let res = await fetch(
+        `/api/status/?user_id=${currentUser}`
+    );
+
+    let data = await res.json();
+
+    // AUTO RESET UI
+    if(!data.is_on_duty){
+
+        document.getElementById("state").innerText =
+        "OFF DUTY 🔴";
+
+        document.getElementById("timer").innerText =
+        "00:00:00";
+
+        stopBeep();
+
+        return;
+    }
+
+    // TIMER
+    let diff = data.session;
+
+    let h = String(Math.floor(diff/3600)).padStart(2,'0');
+
+    let m = String(Math.floor((diff%3600)/60)).padStart(2,'0');
+
+    let s = String(diff%60).padStart(2,'0');
+
+    document.getElementById("timer").innerText =
+    `${h}:${m}:${s}`;
+
+    // BELL REQUIRED
+    if(data.bell_required){
+
+        document.getElementById("state").innerText =
+        `⚠️ CLICK BELL (${data.grace}s)`;
+
+        document.getElementById("bell").style.animation =
+        "pulse 1s infinite";
+
+        startBeep();
+
+    }else{
+
+        document.getElementById("state").innerText =
+        "ON DUTY 🟢";
+
+        document.getElementById("bell").style.animation =
+        "none";
+
+        stopBeep();
+    }
+}
+
+setInterval(syncStatus,1000);
+
+// alarm
+
+const audio = new Audio("{% static 'alarm.mp3' %}");
+
+function startBeep(){
+
+    audio.loop = true;
+    audio.play();
+}
+
+function stopBeep(){
+
+    audio.pause();
+    audio.currentTime = 0;
+}
+
+
+</script>
+
+</body>
+</html>
