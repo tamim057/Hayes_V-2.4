@@ -2,16 +2,24 @@ from zoneinfo import ZoneInfo
 from datetime import datetime
 from django.shortcuts import render
 import json
+import logging
+import os
 import requests
+from dotenv import load_dotenv
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 from .models import Duty
 
-WEBHOOK = "https://discord.com/api/webhooks/1501895480781705349/Tv_6YmCQQs3Vwaf1ItzJ6JhbWrh_HAofwqyKtrLMAG5_z96HpHtJDR0ti14arSnPONZw"
+# Load environment variables
+load_dotenv()
 
-BELL_TIME = 15   # 25 min
-GRACE = 10
+# Configure logging
+logger = logging.getLogger(__name__)
+
+WEBHOOK = os.getenv('DISCORD_WEBHOOK_URL', '')
+BELL_TIME = int(os.getenv('BELL_TIME', '15'))
+GRACE = int(os.getenv('GRACE_PERIOD', '10'))
 
 
 def get_user(user_id):
@@ -25,7 +33,11 @@ def get_user(user_id):
 def safe_json(request):
     try:
         return json.loads(request.body.decode("utf-8"))
-    except:
+    except json.JSONDecodeError as e:
+        logger.warning(f"Invalid JSON received: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Error parsing request body: {e}")
         return None
 
 
@@ -55,17 +67,28 @@ def on_duty(request):
 
     u = get_user(data["user_id"])
 
+    # ALREADY ON DUTY
+    if u.is_on_duty:
+
+        return JsonResponse({
+        "status": "already_on"
+    })
+
     u.is_on_duty = True
+
     u.start_time = timezone.now()
+
     u.bell_required = False
+
     u.last_cycle = 0
+
     u.save()
 
     send_webhook(
-    u.user_id,
-    "🟢 ON DUTY STARTED",
-    0,
-    u.total_seconds
+        u.user_id,
+        "🟢 ON DUTY STARTED",
+        0,
+        u.total_seconds
     )
 
     return JsonResponse({"status": "on"})
@@ -82,6 +105,12 @@ def off_duty(request):
         return JsonResponse({"error": "invalid json"}, status=400)
 
     u = get_user(data["user_id"])
+    # ALREADY OFF DUTY
+    if not u.is_on_duty:
+
+        return JsonResponse({
+            "status": "already_off"
+        })
 
     session_seconds = 0
 
@@ -201,13 +230,18 @@ def send_webhook(user_id, action, session_seconds=0, total_seconds=0):
         ]
     }
 
+    if not WEBHOOK:
+        logger.warning("Discord webhook URL not configured. Skipping webhook.")
+        return
+
     try:
-        requests.post(WEBHOOK, json=data)
-
+        response = requests.post(WEBHOOK, json=data, timeout=5)
+        response.raise_for_status()
+        logger.debug(f"Webhook sent successfully for user {user_id}")
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to send webhook for user {user_id}: {e}")
     except Exception as e:
-        print(e)
-
-from django.shortcuts import render
+        logger.error(f"Unexpected error sending webhook: {e}")
 
 def home(request):
     return render(request, "index.html")
